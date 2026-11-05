@@ -1,5 +1,6 @@
 #include "main.h"
 #include "lemlib/api.hpp" // IWYU pragma: keep
+#include "pros/misc.h"
 /**
  * A callback function for LLEMU's center button.
  *
@@ -8,11 +9,12 @@
  */
 //motor group definition
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({-17, 10},pros::MotorGearset::blue);    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
-pros::MotorGroup right_mg({19, 20},pros::MotorGearset::blue);  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
+pros::MotorGroup right_mg({-17, 5},pros::MotorGearset::blue);    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
+pros::MotorGroup left_mg({19, 10},pros::MotorGearset::blue);  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
 pros::MotorGroup double_reverse_bar({-15,14}, pros::MotorGearset::green); // Creates a motor with port 7 and reversed
-pros::Motor intake(20, pros::MotorGearset::green); // Creates a motor with port 8 and reversed
+pros::MotorGroup intake({-20,-6}, pros::MotorGearset::blue); // Creates a motor with port 8 and reversed
 pros::Motor claw(12, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
+pros::Motor counter_roller(-7, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
 
 lemlib::Drivetrain drivetrain(&left_mg, // left motor group
                               &right_mg, // right motor group
@@ -65,6 +67,10 @@ void on_center_button() {
  * to keep execution time for this mode under a few seconds.
  */
 void initialize() {
+	intake.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
+	claw.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+	double_reverse_bar.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
+
 	pros::lcd::set_text(1, "Hello PROS User!");
 
 	pros::lcd::register_btn1_cb(on_center_button);
@@ -124,20 +130,46 @@ void opcontrol() {
 		                 (pros::lcd::read_buttons() & LCD_BTN_RIGHT) >> 0);  // Prints status of the emulated screen LCDs
 
 		// Arcade control scheme
+		intake.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
+		claw.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+		double_reverse_bar.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+
 		
 		int dir = master.get_analog(ANALOG_LEFT_Y);    // Gets amount forward/backward from left joystick
 		int turn = master.get_analog(ANALOG_LEFT_X); 
 			
 		if (master.get_analog(ANALOG_RIGHT_Y) != 0) {
-			double_reverse_bar.move(master.get_analog(ANALOG_RIGHT_Y));
+			double_reverse_bar.move_voltage(master.get_analog(ANALOG_RIGHT_Y) * (12000.0 / 127.0));
 		}
 		else {
 			double_reverse_bar.brake();
 		}
-		
+
 		left_mg.move(dir - turn);                      // Sets left motor voltage
 		right_mg.move(dir + turn);                     // Sets right motor voltage
         
+		if (master.get_digital(DIGITAL_L1) == 1) {
+			intake.move_voltage(12000.0);
+			counter_roller.move_voltage(12000.0);
+		}
+		else if (master.get_digital(DIGITAL_L2) == 1) {
+			intake.move_voltage(-12000.0);
+			counter_roller.move_voltage(-12000.0);
+		}
+		else {
+			intake.brake();
+			counter_roller.brake();
+		}
+
+		if (master.get_digital(DIGITAL_R1) == 1) {
+			claw.move_voltage(12000.0);
+		}
+		else if (master.get_digital(DIGITAL_R2) == 1) {
+			claw.move_voltage(-12000.0);
+		}
+		else {
+			claw.brake();
+		}
 
 		pros::delay(20);                               // Run for 20 ms then update
 	
