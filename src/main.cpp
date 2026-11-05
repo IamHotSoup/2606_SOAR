@@ -124,16 +124,17 @@ void opcontrol() {
 		                 (pros::lcd::read_buttons() & LCD_BTN_RIGHT) >> 0);  // Prints status of the emulated screen LCDs
 
 		// Arcade control scheme
+		
 		int dir = master.get_analog(ANALOG_LEFT_Y);    // Gets amount forward/backward from left joystick
 		int turn = master.get_analog(ANALOG_LEFT_X); 
 			
-			if (master.get_analog(ANALOG_RIGHT_Y) != 0) {
+		if (master.get_analog(ANALOG_RIGHT_Y) != 0) {
 			double_reverse_bar.move(master.get_analog(ANALOG_RIGHT_Y));
 		}
-			else {
-			double_reverse_bar.brake(); // Stops the double reverse bar if the right joystick is not being used
+		else {
+			double_reverse_bar.brake();
 		}
-
+		
 		left_mg.move(dir - turn);                      // Sets left motor voltage
 		right_mg.move(dir + turn);                     // Sets right motor voltage
         
