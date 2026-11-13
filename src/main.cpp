@@ -9,12 +9,12 @@
  */
 //motor group definition
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup right_mg({-17, 5},pros::MotorGearset::blue);    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
-pros::MotorGroup left_mg({19, 10},pros::MotorGearset::blue);  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
-pros::MotorGroup double_reverse_bar({-15,14}, pros::MotorGearset::green); // Creates a motor with port 7 and reversed
-pros::MotorGroup intake({-20,-6}, pros::MotorGearset::blue); // Creates a motor with port 8 and reversed
+pros::MotorGroup right_mg({10, 19},pros::MotorGearset::blue);    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
+pros::MotorGroup left_mg({-17,- 18},pros::MotorGearset::blue);  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
+pros::MotorGroup double_reverse_bar({15,-14}, pros::MotorGearset::green); // Creates a motor with port 7 and reversed
+pros::MotorGroup intake({-11}, pros::MotorGearset::blue); // Creates a motor with port 8 and reversed
 pros::Motor claw(12, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
-pros::Motor counter_roller(-7, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
+pros::Motor counter_roller(-3, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
 
 lemlib::Drivetrain drivetrain(&left_mg, // left motor group
                               &right_mg, // right motor group
