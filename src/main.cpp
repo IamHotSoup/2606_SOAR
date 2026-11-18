@@ -15,7 +15,7 @@ pros::MotorGroup double_reverse_bar({15,-14}, pros::MotorGearset::green); // Cre
 pros::MotorGroup intake({-13}, pros::MotorGearset::blue); // Creates a motor with port 8 and reversed
 pros::Motor claw(16, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
 pros::Motor counter_roller(-3, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
-pros::Motor claw_intake({-6}, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
+pros::Motor claw_intake(-6, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
 
 lemlib::Drivetrain drivetrain(&left_mg, // left motor group
                               &right_mg, // right motor group
