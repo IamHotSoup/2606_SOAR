@@ -39,17 +39,42 @@ lemlib::TrackingWheel right_tracking(
     600
 );
 
-
+lemlib::OdomSensors sensors(&left_tracking, // vertical tracking wheel 1, set to null
+                            &right_tracking, // vertical tracking wheel 2, set to nullptr as we are using IMEs
+                            nullptr, // horizontal tracking wheel 1
+                            nullptr, // horizontal tracking wheel 2, set to nullptr as we don't have a second one
+                            nullptr // inertial sensor
+);
 
 lemlib::ControllerSettings lateral_controller(
-    10, 0, 3, 3, 1, 100, 3, 250, 5
+    10, 
+	0, 
+	3, 
+	3, //anti windup
+	1, //small error range, in inches 
+	100, //small error range timeout, in ms
+	3, //large error range, in inches
+	250, //large error range timeout, in ms
+	5  //maximum allecleration (slew)
 );
 
 lemlib::ControllerSettings angular_controller(
-    10, 0, 3, 3, 1, 100, 3, 250, 5
+    10,
+	0, 
+	3, 
+	3, //anti windup
+	1, //small error range, in inches 
+	100, //small error range timeout, in ms
+	3, //large error range, in inches
+	250, //large error range timeout, in ms
+	5  //maximum allecleration (slew)
 );
 
-
+lemlib::Chassis chassis(drivetrain, // drivetrain settings
+                        lateral_controller, // lateral PID settings
+                        angular_controller, // angular PID settings
+                        sensors // odometry sensors
+);
 
 void on_center_button() {
 	static bool pressed = false;
@@ -76,7 +101,20 @@ void initialize() {
 
 	pros::lcd::register_btn1_cb(on_center_button);
 	pros::lcd::initialize();
+    chassis.calibrate();
 
+    pros::Task screen_task([&]() {
+        while (true) {
+            lemlib::Pose pose = chassis.getPose();
+
+            pros::lcd::print(0, "X: %.2f", pose.x);
+            pros::lcd::print(1, "Y: %.2f", pose.y);
+            pros::lcd::print(2, "Theta: %.2f", pose.theta);
+
+            pros::delay(20);
+        }
+    });
+	
 }
 
 /**
@@ -108,7 +146,10 @@ void competition_initialize() {}
  * will be stopped. Re-enabling the robot will restart the task, not re-start it
  * from where it left off.
  */
-void autonomous() {}
+void autonomous() {
+	chassis.setPose(0, 0, 0);
+	chassis.moveToPoint(0, 24, 0);
+}
 
 /**
  * Runs the operator control code. This function will be started in its own task
@@ -131,10 +172,8 @@ void opcontrol() {
 		                 (pros::lcd::read_buttons() & LCD_BTN_RIGHT) >> 0);  // Prints status of the emulated screen LCDs
 
 		// Arcade control scheme
-		intake.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
-		claw.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-		double_reverse_bar.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-
+		
+		master.print(0, 0, "Hello World");
 		
 		int dir = master.get_analog(ANALOG_LEFT_Y);    // Gets amount forward/backward from left joystick
 		int turn = master.get_analog(ANALOG_LEFT_X); 
