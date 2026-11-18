@@ -12,9 +12,10 @@ pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup right_mg({10, 19},pros::MotorGearset::blue);    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
 pros::MotorGroup left_mg({-17,- 18},pros::MotorGearset::blue);  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
 pros::MotorGroup double_reverse_bar({15,-14}, pros::MotorGearset::green); // Creates a motor with port 7 and reversed
-pros::MotorGroup intake({-11}, pros::MotorGearset::blue); // Creates a motor with port 8 and reversed
-pros::Motor claw(12, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
+pros::MotorGroup intake({-13}, pros::MotorGearset::blue); // Creates a motor with port 8 and reversed
+pros::Motor claw(16, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
 pros::Motor counter_roller(-3, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
+pros::Motor claw_intake({-6}, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
 
 lemlib::Drivetrain drivetrain(&left_mg, // left motor group
                               &right_mg, // right motor group
@@ -145,20 +146,20 @@ void opcontrol() {
 			double_reverse_bar.brake();
 		}
 
-		left_mg.move(dir - turn);                      // Sets left motor voltage
-		right_mg.move(dir + turn);                     // Sets right motor voltage
+		left_mg.move(dir + turn);                      // Sets left motor voltage
+		right_mg.move(dir - turn);                     // Sets right motor voltage
         
 		if (master.get_digital(DIGITAL_L1) == 1) {
 			intake.move_voltage(12000.0);
-			counter_roller.move_voltage(12000.0);
+			claw_intake.move_voltage(12000.0);
 		}
 		else if (master.get_digital(DIGITAL_L2) == 1) {
 			intake.move_voltage(-12000.0);
-			counter_roller.move_voltage(-12000.0);
+			claw_intake.move_voltage(-12000.0);
 		}
 		else {
 			intake.brake();
-			counter_roller.brake();
+			claw_intake.brake();
 		}
 
 		if (master.get_digital(DIGITAL_R1) == 1) {
