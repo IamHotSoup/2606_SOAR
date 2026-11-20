@@ -1,12 +1,20 @@
 #include "main.h"
+#include "fmt/core.h"
 #include "lemlib/api.hpp" // IWYU pragma: keep
+#include "lemlib/pid.hpp"
 #include "pros/misc.h"
+#include "pros/motors.h"
+#include "pros/rtos.hpp"
+#include <algorithm>
+#include <cmath>
+#include <atomic>
 /**
  * A callback function for LLEMU's center button.
  *
  * When this callback is fired, it will toggle line 2 of the LCD text between
  * "I was pressed!" and nothing.
  */
+ double gear_ratio = 36.0/60.0;
 //motor group definition
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup right_mg({10, 19},pros::MotorGearset::blue);    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
@@ -17,11 +25,13 @@ pros::Motor claw(16, pros::MotorGearset::green); // Creates a motor with port 9 
 pros::Motor counter_roller(-3, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
 pros::Motor claw_intake(-6, pros::MotorGearset::green); // Creates a motor with port 9 and reversed
 
+pros::Rotation claw_rotation_sensor(5); // Creates a rotation sensor on port 12
+
 lemlib::Drivetrain drivetrain(&left_mg, // left motor group
                               &right_mg, // right motor group
                               14, // 14 inch track width
                               lemlib::Omniwheel::NEW_275, // using new 4" omnis
-                              600, // drivetrain rpm is 600
+                              600*gear_ratio, // drivetrain rpm is 600
                               2 // horizontal drift is 2 (for now)
 );
 
@@ -29,14 +39,16 @@ lemlib::TrackingWheel left_tracking(
     &left_mg,
     lemlib::Omniwheel::NEW_275,
     -7,
-    600
+    600*gear_ratio
 );
+
+
 
 lemlib::TrackingWheel right_tracking(
     &right_mg,
     lemlib::Omniwheel::NEW_275,
     7,
-    600
+    600*gear_ratio
 );
 
 lemlib::OdomSensors sensors(&left_tracking, // vertical tracking wheel 1, set to null
@@ -47,21 +59,21 @@ lemlib::OdomSensors sensors(&left_tracking, // vertical tracking wheel 1, set to
 );
 
 lemlib::ControllerSettings lateral_controller(
-    10, 
+    6.5, 
 	0, 
 	3, 
 	3, //anti windup
-	1, //small error range, in inches 
+	.7, //small error range, in inches 
 	100, //small error range timeout, in ms
 	3, //large error range, in inches
-	250, //large error range timeout, in ms
+	5000, //large error range timeout, in ms
 	5  //maximum allecleration (slew)
 );
 
 lemlib::ControllerSettings angular_controller(
-    10,
+    5,
 	0, 
-	3, 
+	3.5, 
 	3, //anti windup
 	1, //small error range, in inches 
 	100, //small error range timeout, in ms
@@ -75,6 +87,60 @@ lemlib::Chassis chassis(drivetrain, // drivetrain settings
                         angular_controller, // angular PID settings
                         sensors // odometry sensors
 );
+
+lemlib::PID claw_pid(
+		30, // kP
+        0.01, // kI
+        7, // kD
+        5, // integral anti windup range
+        false);
+
+
+std::atomic<double> controller_input{0.0};
+std::atomic<double> claw_target{0.0};
+std::atomic<bool> claw_pid_enabled{false};
+std::atomic<bool> claw_new_target{false};
+
+
+void claw_task_move(void* param) {
+	claw_pid.reset();
+	while (true) {
+		
+		if (claw_new_target.load() == true) {
+    		claw_pid.reset();
+    		claw_new_target.store(false);
+		}
+		
+		if (claw_pid_enabled.load() == true) {
+			double claw_position = claw_rotation_sensor.get_position()/100.0;
+
+			
+			double target = claw_target.load();
+			double error = target - claw_position;
+			double output = claw_pid.update(error);
+			output = std::clamp(output, -12000.0, 12000.0);
+			claw.move_voltage(output); 
+	
+	 		if (std::abs(error) < 5.0) {
+            	claw_pid_enabled.store(false);
+				claw.move_voltage(0);
+				}
+			
+
+			pros::delay(20);
+		}
+		else if (claw_pid_enabled.load() == false) {
+			claw_pid.reset();
+			claw.move_voltage(controller_input.load());
+			pros::delay(20);
+		}
+	}
+	claw.move_voltage(0);
+}
+
+
+
+
 
 void on_center_button() {
 	static bool pressed = false;
@@ -95,26 +161,14 @@ void on_center_button() {
 void initialize() {
 	intake.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
 	claw.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-	double_reverse_bar.set_brake_mode(pros::E_MOTOR_BRAKE_BRAKE);
-
-	pros::lcd::set_text(1, "Hello PROS User!");
-
-	pros::lcd::register_btn1_cb(on_center_button);
+	double_reverse_bar.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 	pros::lcd::initialize();
-    chassis.calibrate();
-
-    pros::Task screen_task([&]() {
-        while (true) {
-            lemlib::Pose pose = chassis.getPose();
-
-            pros::lcd::print(0, "X: %.2f", pose.x);
-            pros::lcd::print(1, "Y: %.2f", pose.y);
-            pros::lcd::print(2, "Theta: %.2f", pose.theta);
-
-            pros::delay(20);
-        }
-    });
 	
+	pros::lcd::register_btn1_cb(on_center_button);
+	
+    chassis.calibrate();
+	//pros::Task claw_task(claw_move_pid, nullptr);*/
+   
 }
 
 /**
@@ -148,9 +202,17 @@ void competition_initialize() {}
  */
 void autonomous() {
 	chassis.setPose(0, 0, 0);
-	chassis.moveToPoint(0, 24, 0);
-}
+	
 
+}
+int a(){
+	chassis.moveToPose(0,-17.2,0,100000);
+	pros::delay(500);
+	chassis.turnToHeading(34.9,100000);
+	pros::delay(500);
+	chassis.moveToPose(-2.2,-22.9,34.9,100000);
+	return 0;
+}
 /**
  * Runs the operator control code. This function will be started in its own task
  * with the default priority and stack size whenever the robot is enabled via
@@ -164,22 +226,32 @@ void autonomous() {
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
-void opcontrol() {
-
+ double target_claw_up = 563.55;
+ double target_claw_down = 211.64;
+ void opcontrol() {
+	chassis.setPose(0, 0, 0);
+	pros::Task claw_task(claw_task_move);
 	while (true) {
-		pros::lcd::print(0, "%d %d %d", (pros::lcd::read_buttons() & LCD_BTN_LEFT) >> 2,
-		                 (pros::lcd::read_buttons() & LCD_BTN_CENTER) >> 1,
-		                 (pros::lcd::read_buttons() & LCD_BTN_RIGHT) >> 0);  // Prints status of the emulated screen LCDs
-
-		// Arcade control scheme
 		
-		master.print(0, 0, "Hello World");
+		
+	
+		lemlib::Pose pose = chassis.getPose();
+
+		pros::lcd::print(0, "X: %.1f Y: %.1f", pose.x, pose.y);
+		pros::lcd::print(1, "Heading: %.1f", pose.theta);
+		pros::lcd::print(2, "Claw: %.1f",
+		claw_rotation_sensor.get_position() / 100.0);
 		
 		int dir = master.get_analog(ANALOG_LEFT_Y);    // Gets amount forward/backward from left joystick
 		int turn = master.get_analog(ANALOG_LEFT_X); 
 			
-		if (master.get_analog(ANALOG_RIGHT_Y) != 0) {
+		if (master.get_analog(ANALOG_RIGHT_Y) > 0) {
 			double_reverse_bar.move_voltage(master.get_analog(ANALOG_RIGHT_Y) * (12000.0 / 127.0));
+			
+		}
+		else if (master.get_analog(ANALOG_RIGHT_Y) < 0) {
+			double_reverse_bar.move_voltage(master.get_analog(ANALOG_RIGHT_Y) * (12000.0 / 127.0));
+			
 		}
 		else {
 			double_reverse_bar.brake();
@@ -201,17 +273,33 @@ void opcontrol() {
 			claw_intake.brake();
 		}
 
-		if (master.get_digital(DIGITAL_R1) == 1) {
-			claw.move_voltage(12000.0);
+		if (master.get_digital_new_press(DIGITAL_R1) == 1) {
+			claw_target.store(target_claw_up);
+			
+			claw_new_target.store(true);
+			claw_pid_enabled.store(true);
 		}
-		else if (master.get_digital(DIGITAL_R2) == 1) {
-			claw.move_voltage(-12000.0);
-		}
-		else {
-			claw.brake();
+		else if (master.get_digital_new_press(DIGITAL_R2) == 1) {
+			claw_target.store(target_claw_down);
+			
+			claw_new_target.store(true);
+			claw_pid_enabled.store(true);
 		}
 
+		if (master.get_digital(DIGITAL_B) == 1) {
+			claw_pid_enabled.store(false);
+			controller_input.store(12000.0);
+		}
+		else if (master.get_digital(DIGITAL_X) == 1) {
+			claw_pid_enabled.store(false);
+			controller_input.store(-12000.0);
+		}
+		else if (claw_pid_enabled.load() != true) {
+			claw.brake();
+		}
+		
+
 		pros::delay(20);                               // Run for 20 ms then update
-	
 	}
 }
+
